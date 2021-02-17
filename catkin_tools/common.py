@@ -411,48 +411,18 @@ def __warn_terminal_width_once():
           file=sys.stderr)
 
 
-def terminal_width_windows():
-    """Returns the estimated width of the terminal on Windows"""
-    from ctypes import windll, create_string_buffer
-    h = windll.kernel32.GetStdHandle(-12)
-    csbi = create_string_buffer(22)
-    res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
-
-    # return default size if actual size can't be determined
-    if not res:
-        __warn_terminal_width_once()
-        return __default_terminal_width
-
-    import struct
-    (bufx, bufy, curx, cury, wattr, left, top, right, bottom, maxx, maxy)\
-        = struct.unpack("hhhhHhhhhhh", csbi.raw)
-    width = right - left + 1
-
-    return width
-
-
-def terminal_width_linux():
-    """Returns the estimated width of the terminal on linux"""
-    from fcntl import ioctl
-    from termios import TIOCGWINSZ
-    import struct
-    try:
-        with open(os.ctermid(), "rb") as f:
-            height, width = struct.unpack("hh", ioctl(f.fileno(), TIOCGWINSZ, "1234"))
-    except (IOError, OSError, struct.error):
-        # return default size if actual size can't be determined
-        __warn_terminal_width_once()
-        return __default_terminal_width
-    return width
-
-
 def terminal_width():
     """Returns the estimated width of the terminal"""
+    # Use COLUMNS environment variable if it is set
     try:
-        return terminal_width_windows() if os.name == 'nt' else terminal_width_linux()
-    except ValueError:
-        # Failed to get the width, use the default 80
-        return __default_terminal_width
+        width = int(os.environ['COLUMNS'])
+    except (KeyError, ValueError):
+        try:
+            width = os.get_terminal_size().columns
+        except (AttributeError, ValueError, OSError):
+            __warn_terminal_width_once()
+            width = __default_terminal_width
+    return width
 
 
 _ansi_escape = re.compile(r'\x1b[^m]*m')
